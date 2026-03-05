@@ -143,6 +143,18 @@ struct ContentView: View {
                     }
                     .keyboardShortcut(.defaultAction)
 
+                    Button("Start DLNA Now") {
+                        startDLNANow()
+                    }
+
+                    Button("Stop DLNA") {
+                        stopDLNANow()
+                    }
+
+                    Button("DLNA Health Check") {
+                        runDLNAHealthCheck()
+                    }
+
                     Button("Remove Mount") {
                         removeMount()
                     }
@@ -467,6 +479,163 @@ struct ContentView: View {
                     lastErrorDetails = logTail.isEmpty ? "Check \(mountLog)" : logTail
                 }
 
+                refreshServiceStatusDelayed()
+            }
+        }
+    }
+
+    private func startDLNANow() {
+        guard ensureConfigPathSelected() else { return }
+
+        let requestedRemote = remoteName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !requestedRemote.isEmpty else {
+            status = "Remote name cannot be empty."
+            lastErrorDetails = status
+            return
+        }
+
+        guard let rclone = resolveRcloneBinary() else {
+            status = "rclone binary was not found."
+            lastErrorDetails = status
+            return
+        }
+
+        let remoteResolution = resolveRemote(requested: requestedRemote, configPath: configPath)
+        guard let effectiveRemote = remoteResolution.remote else {
+            status = "Could not find any remotes in selected rclone.conf."
+            lastErrorDetails = remoteResolution.message ?? "No remotes returned by rclone listremotes."
+            return
+        }
+
+        if let message = remoteResolution.message {
+            status = message
+            lastErrorDetails = message
+            remoteName = effectiveRemote
+        }
+
+        if isProcessRunning(matching: "rclone.*serve.*dlna") {
+            status = "DLNA appears to already be running."
+            refreshServiceStatusDelayed()
+            return
+        }
+
+        let dlnaLog = userDLNALogPath()
+        let dlnaLogDir = (dlnaLog as NSString).deletingLastPathComponent
+        do {
+            try FileManager.default.createDirectory(atPath: dlnaLogDir, withIntermediateDirectories: true)
+        } catch {
+            status = "Failed to create DLNA log directory: \(dlnaLogDir)"
+            lastErrorDetails = error.localizedDescription
+            return
+        }
+
+        status = "Starting DLNA server for \(effectiveRemote)..."
+
+        let shellCommand = [
+            "nohup",
+            shellEscape(rclone),
+            "serve",
+            "dlna",
+            shellEscape("\(effectiveRemote):"),
+            "--name",
+            shellEscape("3DFlickFix"),
+            "--dir-cache-time", "72h",
+            "--drive-chunk-size", "64M",
+            "--log-level", "INFO",
+            "--vfs-read-chunk-size", "32M",
+            "--vfs-read-chunk-size-limit", "off",
+            "--config", shellEscape(configPath),
+            "--log-file", shellEscape(dlnaLog),
+            "--vfs-cache-mode", "full",
+            ">/dev/null 2>&1 &"
+        ].joined(separator: " ")
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = runCommand("/bin/sh", arguments: ["-lc", shellCommand])
+            let logTail = tailFile(path: dlnaLog, lines: 40)
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                if isProcessRunning(matching: "rclone.*serve.*dlna") {
+                    status = "DLNA started successfully."
+                    lastErrorDetails = ""
+                } else {
+                    status = "DLNA failed to start."
+                    lastErrorDetails = logTail.isEmpty ? "Check \(dlnaLog)" : logTail
+                }
+                refreshServiceStatusDelayed()
+            }
+        }
+    }
+
+    private func stopDLNANow() {
+        let result = runCommand("/usr/bin/pkill", arguments: ["-f", "rclone.*serve.*dlna"])
+        if result.exitCode == 0 {
+            status = "Stopped DLNA process."
+            lastErrorDetails = ""
+        } else {
+            status = "No running DLNA process found."
+            lastErrorDetails = ""
+        }
+        refreshServiceStatusDelayed()
+    }
+
+    private func runDLNAHealthCheck() {
+        status = "Running DLNA health check..."
+        lastErrorDetails = ""
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            var checks: [String] = []
+            var passed = true
+
+            let processResult = runCommand("/usr/bin/pgrep", arguments: ["-f", "rclone.*serve.*dlna"])
+            if processResult.exitCode == 0 {
+                let procLine = processResult.output.split(separator: "\n").first.map(String.init) ?? "running"
+                checks.append("Process: OK (\(procLine))")
+            } else {
+                checks.append("Process: FAIL (no running rclone DLNA process found)")
+                passed = false
+            }
+
+            let listenResult = runCommand("/usr/sbin/lsof", arguments: ["-nP", "-iTCP:7879", "-sTCP:LISTEN"])
+            if listenResult.exitCode == 0, listenResult.output.contains("rclone") {
+                checks.append("Port 7879: OK (rclone is listening)")
+            } else {
+                checks.append("Port 7879: FAIL (rclone is not listening)")
+                passed = false
+            }
+
+            let endpoints = [
+                "/static/ContentDirectory.xml",
+                "/static/ConnectionManager.xml",
+                "/static/X_MS_MediaReceiverRegistrar.xml"
+            ]
+
+            for endpoint in endpoints {
+                let url = "http://127.0.0.1:7879\(endpoint)"
+                let curl = runCommand("/usr/bin/curl", arguments: ["-s", "--max-time", "4", "-o", "/dev/null", "-w", "%{http_code}", url])
+                if curl.exitCode == 0, curl.output == "200" {
+                    checks.append("\(endpoint): OK (200)")
+                } else {
+                    let code = curl.output.isEmpty ? "no response" : curl.output
+                    checks.append("\(endpoint): FAIL (\(code))")
+                    passed = false
+                }
+            }
+
+            if !passed {
+                let dlnaLog = userDLNALogPath()
+                let tail = tailFile(path: dlnaLog, lines: 40)
+                if !tail.isEmpty {
+                    checks.append("")
+                    checks.append("Recent DLNA log:")
+                    checks.append(tail)
+                }
+            }
+
+            let details = checks.joined(separator: "\n")
+            DispatchQueue.main.async {
+                status = passed ? "DLNA health check passed." : "DLNA health check failed."
+                lastErrorDetails = details
                 refreshServiceStatusDelayed()
             }
         }
@@ -1014,6 +1183,11 @@ private func tailFile(path: String, lines: Int) -> String {
 private func userMountLogPath() -> String {
     let home = NSHomeDirectory()
     return "\(home)/Library/Logs/3DFlickFix/mount.log"
+}
+
+private func userDLNALogPath() -> String {
+    let home = NSHomeDirectory()
+    return "\(home)/Library/Logs/3DFlickFix/dlna.log"
 }
 
 private func isProcessRunning(matching pattern: String) -> Bool {
