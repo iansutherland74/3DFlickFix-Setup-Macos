@@ -114,4 +114,4 @@ To verify that everything is working correctly:
 
 
 sudo rclone mount --daemon --allow-other --vfs-read-chunk-size=32M --poll-interval 15s --vfs-cache-mode writes --disable About 3DFlickFix1
-: /Users/sutherland/Downloads/3DFlickFix-MacOS/3DFlickFix1
+: /Users/<your path>/Downloads/3DFlickFix-MacOS/3DFlickFix1
