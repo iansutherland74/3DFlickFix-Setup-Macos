@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Build output
+.build-gui/
+
+# Runtime state/logs
+.3dflickfix_state
+DLNAlog.txt
+Mountlog.txt
+*.log
+
+# Local mount/content folders
+3DFF/
+3DFlickFix*/
+Mount/
+Adult Section/
+
+# Scratch/test folders
+test/
+TESTING/
+xxx/
