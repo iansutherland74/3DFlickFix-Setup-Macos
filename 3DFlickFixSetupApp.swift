@@ -9,7 +9,7 @@ struct ContentView: View {
     @State private var mountpoint: String = "3DFF"
     @State private var remoteName: String = "3DFF"
     @State private var mode: SetupMode = .both
-    @State private var status: String = "Choose your rclone.conf and mount directory, then use Mount Now."
+    @State private var status: String = "Select your rclone config and mount folder, then click Mount Now."
     @State private var mountServiceStatus: String = "Unknown"
     @State private var dlnaServiceStatus: String = "Unknown"
     @State private var macFUSEStatus: String = "Unknown"
@@ -29,195 +29,272 @@ struct ContentView: View {
     private let flashTimer = Timer.publish(every: 0.7, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("3DFlickFix Setup")
-                        .font(.title2)
-                        .bold()
-                    Spacer()
-                    Button(isFirstInstallRunning ? "First Time Installation..." : "First Time Installation") {
-                        firstTimeInstallation()
-                    }
-                    .disabled(isFirstInstallRunning)
-                }
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.93, green: 0.95, blue: 0.99),
+                    Color(red: 0.88, green: 0.92, blue: 0.98)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
-            GroupBox("rclone.conf") {
-                HStack {
-                    Text(configPath.isEmpty ? "No file selected" : configPath)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer()
-                    Button("Select File") {
-                        pickConfigFile()
-                    }
-                }
-                .padding(6)
-            }
+            Circle()
+                .fill(Color.white.opacity(0.5))
+                .frame(width: 420, height: 420)
+                .blur(radius: 40)
+                .offset(x: -240, y: -220)
 
-                GroupBox("Mount Directory") {
-                    HStack {
-                        Text(mountBaseDir)
+            Circle()
+                .fill(Color.cyan.opacity(0.18))
+                .frame(width: 480, height: 480)
+                .blur(radius: 60)
+                .offset(x: 300, y: 260)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    glassSurface {
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("3DFlickFix Setup")
+                                    .font(.system(size: 30, weight: .semibold, design: .rounded))
+                                Text("Mount and DLNA control center for Apple Silicon")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button(isFirstInstallRunning ? "Setting Up..." : "Set Up Everything") {
+                                firstTimeInstallation()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                            .disabled(isFirstInstallRunning)
+                        }
+                    }
+
+                    glassSurface {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Configuration")
+                                .font(.headline)
+
+                            HStack(spacing: 10) {
+                                Label("rclone config file", systemImage: "doc.text")
+                                    .foregroundStyle(.secondary)
+                                Text(configPath.isEmpty ? "No file selected" : configPath)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer()
+                                Button("Select File") {
+                                    pickConfigFile()
+                                }
+                                .buttonStyle(GlassActionButtonStyle())
+                            }
+
+                            HStack(spacing: 10) {
+                                Label("Mount folder", systemImage: "folder")
+                                    .foregroundStyle(.secondary)
+                                Text(mountBaseDir)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer()
+                                Button("Select Folder") {
+                                    pickMountDirectory()
+                                }
+                                .buttonStyle(GlassActionButtonStyle())
+                            }
+                        }
+                    }
+
+                    glassSurface {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Dependencies")
+                                .font(.headline)
+
+                            HStack(spacing: 14) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("macFUSE: \(macFUSEStatus)")
+                                    Text("rclone: \(rcloneInstalledStatus)")
+                                }
+
+                                Spacer()
+
+                                HStack(spacing: 8) {
+                                    Button("Install / Update macFUSE") {
+                                        downloadAndInstallMacFUSE()
+                                    }
+                                    Button("Install / Update rclone") {
+                                        downloadAndInstallRclone()
+                                    }
+                                }
+                                .buttonStyle(GlassActionButtonStyle())
+                            }
+
+                            HStack(spacing: 6) {
+                                Text("macFUSE")
+                                    .foregroundStyle(.secondary)
+                                Text("installed \(macFUSEInstalledVersion)")
+                                    .foregroundStyle(.secondary)
+                                Text("latest \(macFUSELatestVersion)")
+                                    .foregroundStyle(macFUSEVersionStatus == "Update available" ? .red : .secondary)
+                                    .opacity(macFUSEVersionStatus == "Update available" ? (flashVersionBadge ? 0.35 : 1.0) : 1.0)
+                                Text("(\(macFUSEVersionStatus))")
+                                    .foregroundStyle(.secondary)
+                                Text("|")
+                                    .foregroundStyle(.secondary)
+                                Text("rclone")
+                                    .foregroundStyle(.secondary)
+                                Text("installed \(rcloneInstalledVersion)")
+                                    .foregroundStyle(.secondary)
+                                Text("latest \(rcloneLatestVersion)")
+                                    .foregroundStyle(rcloneVersionStatus == "Update available" ? .red : .secondary)
+                                    .opacity(rcloneVersionStatus == "Update available" ? (flashVersionBadge ? 0.35 : 1.0) : 1.0)
+                                Text("(\(rcloneVersionStatus))")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .font(.caption)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        Spacer()
-                        Button("Select Folder") {
-                            pickMountDirectory()
                         }
                     }
-                    .padding(6)
-                }
 
-                GroupBox("Macfuse & Rclone") {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("macFUSE: \(macFUSEStatus)")
-                            Text("rclone: \(rcloneInstalledStatus)")
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 8) {
-                            Button("Download & Install macFUSE") {
-                                downloadAndInstallMacFUSE()
+                    glassSurface {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Service Mode")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Picker("Mode", selection: $mode) {
+                                    ForEach(SetupMode.allCases) { option in
+                                        Text(option.displayName).tag(option)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                .frame(width: 280)
                             }
-                            Button("Download & Install rclone") {
-                                downloadAndInstallRclone()
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Remote")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                TextField("3DFF", text: $remoteName)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 130)
+                            }
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Mount Name")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                TextField("3DFF", text: $mountpoint)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 150)
+                            }
+
+                            Spacer()
+                        }
+                    }
+
+                    glassSurface {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Quick Actions")
+                                .font(.headline)
+
+                            HStack(spacing: 8) {
+                                Button("Mount Now") {
+                                    mountNow()
+                                }
+                                .keyboardShortcut(.defaultAction)
+
+                                Button("Start DLNA") {
+                                    startDLNANow()
+                                }
+
+                                Button("Stop DLNA") {
+                                    stopDLNANow()
+                                }
+
+                                Button("Check DLNA Health") {
+                                    runDLNAHealthCheck()
+                                }
+                            }
+
+                            HStack(spacing: 8) {
+                                Button("Remove Mount") {
+                                    removeMount()
+                                }
+
+                                Button("Remove Services") {
+                                    removeServices()
+                                }
+
+                                Button("Test Connection") {
+                                    testConnection()
+                                }
+
+                                Button("Refresh Status") {
+                                    refreshServiceStatus()
+                                }
+
+                                Button("Open Logs") {
+                                    openLogsFolder()
+                                }
+
+                                Button("Copy Details") {
+                                    copyErrorText()
+                                }
+                                .disabled(lastErrorDetails.isEmpty)
                             }
                         }
-                    }
-                    .padding(6)
-                }
-
-                HStack(spacing: 6) {
-                    Text("macFUSE:")
-                        .foregroundStyle(.secondary)
-                    Text("installed \(macFUSEInstalledVersion) latest")
-                        .foregroundStyle(.secondary)
-                    Text(macFUSELatestVersion)
-                        .foregroundStyle(macFUSEVersionStatus == "Update available" ? .red : .secondary)
-                        .opacity(macFUSEVersionStatus == "Update available" ? (flashVersionBadge ? 0.35 : 1.0) : 1.0)
-                    Text("(\(macFUSEVersionStatus)) | rclone: installed")
-                        .foregroundStyle(.secondary)
-                    Text(rcloneInstalledVersion)
-                        .foregroundStyle(.secondary)
-                    Text("latest")
-                        .foregroundStyle(.secondary)
-                    Text(rcloneLatestVersion)
-                        .foregroundStyle(rcloneVersionStatus == "Update available" ? .red : .secondary)
-                        .opacity(rcloneVersionStatus == "Update available" ? (flashVersionBadge ? 0.35 : 1.0) : 1.0)
-                    Text("(\(rcloneVersionStatus))")
-                        .foregroundStyle(.secondary)
-                }
-                .lineLimit(1)
-                .truncationMode(.middle)
-
-            HStack(spacing: 12) {
-                VStack(alignment: .leading) {
-                    Text("Mode")
-                    Picker("Mode", selection: $mode) {
-                        ForEach(SetupMode.allCases) { option in
-                            Text(option.displayName).tag(option)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 280)
-                }
-
-                VStack(alignment: .leading) {
-                    Text("Remote")
-                    TextField("3DFF", text: $remoteName)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 120)
-                }
-
-                VStack(alignment: .leading) {
-                    Text("Mountpoint")
-                    TextField("3DFF", text: $mountpoint)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 140)
-                }
-            }
-
-                HStack(spacing: 10) {
-                    Button("Mount Now") {
-                        mountNow()
-                    }
-                    .keyboardShortcut(.defaultAction)
-
-                    Button("Start DLNA Now") {
-                        startDLNANow()
+                        .buttonStyle(GlassActionButtonStyle())
                     }
 
-                    Button("Stop DLNA") {
-                        stopDLNANow()
-                    }
-
-                    Button("DLNA Health Check") {
-                        runDLNAHealthCheck()
-                    }
-
-                    Button("Remove Mount") {
-                        removeMount()
-                    }
-
-                    Button("Remove Services") {
-                        removeServices()
-                    }
-
-                    Button("Test Connection") {
-                        testConnection()
-                    }
-
-                    Button("Refresh Status") {
-                        refreshServiceStatus()
-                    }
-
-                    Button("Open Logs Folder") {
-                        openLogsFolder()
-                    }
-
-                    Button("Copy Error") {
-                        copyErrorText()
-                    }
-                    .disabled(lastErrorDetails.isEmpty)
-                }
-
-                GroupBox("Live Status") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Mount Service: \(mountServiceStatus)")
-                        Text("DLNA Service: \(dlnaServiceStatus)")
-                        Text("macFUSE: \(macFUSEStatus)")
-                        Text("Remote Test: \(connectionStatus)")
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(6)
-                }
-
-                GroupBox("Last Error") {
-                    ScrollView {
-                        Text(lastErrorDetails.isEmpty ? "No errors yet." : lastErrorDetails)
-                            .font(.system(.caption, design: .monospaced))
+                    HStack(alignment: .top, spacing: 12) {
+                        glassSurface {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Live Status")
+                                    .font(.headline)
+                                Text("Mount Service: \(mountServiceStatus)")
+                                Text("DLNA Service: \(dlnaServiceStatus)")
+                                Text("macFUSE: \(macFUSEStatus)")
+                                Text("Connection Test: \(connectionStatus)")
+                            }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
-                            .padding(6)
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        glassSurface {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Details")
+                                    .font(.headline)
+                                ScrollView {
+                                    Text(lastErrorDetails.isEmpty ? "No details yet." : lastErrorDetails)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .textSelection(.enabled)
+                                }
+                                .frame(height: 120)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(height: 96)
+
+                    glassSurface {
+                        Text(status)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
-
-                Text(status)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 8)
-
-                Spacer(minLength: 0)
+                .padding(20)
             }
-            .padding(16)
         }
         .frame(minWidth: 760, minHeight: 420)
         .onAppear {
             if configPath.isEmpty, let detected = autoDetectRcloneConfigPath() {
                 configPath = detected
-                status = "Auto-selected config: \((detected as NSString).lastPathComponent)"
+                status = "Auto-selected config file: \((detected as NSString).lastPathComponent)"
             }
             refreshServiceStatus()
             refreshMacFUSEStatus()
@@ -235,17 +312,29 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
+    private func glassSurface<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(14)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.white.opacity(0.35), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 6)
+    }
+
     private func pickConfigFile() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [UTType(filenameExtension: "conf") ?? .plainText]
-        panel.message = "Select your rclone.conf file"
+        panel.message = "Choose your rclone.conf file."
 
         if panel.runModal() == .OK, let url = panel.url {
             configPath = url.path
-            status = "Selected config: \(url.lastPathComponent)"
+            status = "Selected config file: \(url.lastPathComponent)"
         }
     }
 
@@ -254,11 +343,11 @@ struct ContentView: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.message = "Select the base folder where the mountpoint will be created"
+        panel.message = "Choose the folder where the mount will be created."
 
         if panel.runModal() == .OK, let url = panel.url {
             mountBaseDir = url.path
-            status = "Selected mount directory: \(url.path)"
+            status = "Selected mount folder: \(url.path)"
         }
     }
 
@@ -266,25 +355,25 @@ struct ContentView: View {
         guard ensureConfigPathSelected() else { return }
 
         if (mode == .mount || mode == .both) && mountpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            status = "Mountpoint cannot be empty for mount mode."
+            status = "Enter a mount name to continue."
             return
         }
 
         guard let script = Bundle.main.path(forResource: "InstallServices", ofType: "sh") else {
-            status = "InstallServices.sh was not found in app resources."
+            status = "InstallServices.sh is missing from the app bundle."
             lastErrorDetails = status
             return
         }
 
         guard let stagedConfigPath = stageConfigForPrivilegedAccess() else {
-            status = "Failed to stage rclone.conf for privileged install."
+            status = "Could not prepare rclone.conf for installation."
             return
         }
 
         let requestedRemote = remoteName.trimmingCharacters(in: .whitespacesAndNewlines)
         let remoteResolution = resolveRemote(requested: requestedRemote, configPath: stagedConfigPath)
         guard let effectiveRemote = remoteResolution.remote else {
-            status = "Could not find any remotes in selected rclone.conf."
+            status = "No remotes were found in the selected rclone.conf file."
             lastErrorDetails = remoteResolution.message ?? "No remotes returned by rclone listremotes."
             return
         }
@@ -313,7 +402,7 @@ struct ContentView: View {
         guard ensureConfigPathSelected() else { return }
 
         isFirstInstallRunning = true
-        status = "Running first-time installation checks..."
+        status = "Running first-time setup checks..."
         lastErrorDetails = ""
 
         refreshVersionChecks { macStatus, rcloneStatus in
@@ -324,19 +413,19 @@ struct ContentView: View {
     private func runFirstTimeDependencyInstall(macStatus: String, rcloneStatus: String) {
         if macStatus == "Update available" || macStatus == "Not installed" {
             DispatchQueue.main.async {
-                status = "macFUSE is missing/outdated. Installing latest macFUSE..."
+                status = "macFUSE is missing or out of date. Installing the latest version..."
             }
 
             downloadAndInstallMacFUSE { success, message in
                 DispatchQueue.main.async {
                     if !success {
-                        status = "Failed to install macFUSE before setup."
+                        status = "macFUSE installation failed before setup could continue."
                         lastErrorDetails = message
                         isFirstInstallRunning = false
                         return
                     }
 
-                    status = "macFUSE installed. Checking rclone..."
+                    status = "macFUSE is ready. Checking rclone..."
                     refreshVersionChecks { _, refreshedRcloneStatus in
                         runFirstTimeRcloneInstallIfNeeded(rcloneStatus: refreshedRcloneStatus)
                     }
@@ -351,19 +440,19 @@ struct ContentView: View {
     private func runFirstTimeRcloneInstallIfNeeded(rcloneStatus: String) {
         if rcloneStatus == "Update available" || rcloneStatus == "Not installed" {
             DispatchQueue.main.async {
-                status = "rclone is missing/outdated. Downloading and installing rclone..."
+                status = "rclone is missing or out of date. Installing the latest version..."
             }
 
             downloadAndInstallRclone { success, message in
                 DispatchQueue.main.async {
                     if !success {
-                        status = "Failed to install rclone before setup."
+                        status = "rclone installation failed before setup could continue."
                         lastErrorDetails = message
                         isFirstInstallRunning = false
                         return
                     }
 
-                    status = "rclone installed. Running install setup..."
+                    status = "rclone is ready. Finishing setup..."
                     installServices()
                     isFirstInstallRunning = false
                 }
@@ -372,7 +461,7 @@ struct ContentView: View {
         }
 
         DispatchQueue.main.async {
-            status = "Versions are ready. Running install setup..."
+            status = "Everything is up to date. Finishing setup..."
             installServices()
             isFirstInstallRunning = false
         }
@@ -384,30 +473,30 @@ struct ContentView: View {
         let remote = remoteName.trimmingCharacters(in: .whitespacesAndNewlines)
         let point = mountpoint.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !remote.isEmpty else {
-            status = "Remote name cannot be empty."
+            status = "Enter a remote name to continue."
             lastErrorDetails = status
             return
         }
         guard !point.isEmpty else {
-            status = "Mountpoint cannot be empty."
+            status = "Enter a mount name to continue."
             lastErrorDetails = status
             return
         }
 
         guard let rclone = resolveRcloneBinary() else {
-            status = "rclone binary was not found."
+            status = "rclone could not be found. Please install or update rclone first."
             lastErrorDetails = status
             return
         }
 
         guard let stagedConfigPath = stageConfigForPrivilegedAccess() else {
-            status = "Failed to stage rclone.conf for mount."
+            status = "Could not prepare rclone.conf for mounting."
             return
         }
 
         let remoteResolution = resolveRemote(requested: remote, configPath: stagedConfigPath)
         guard let effectiveRemote = remoteResolution.remote else {
-            status = "Could not find any remotes in selected rclone.conf."
+            status = "No remotes were found in the selected rclone.conf file."
             lastErrorDetails = remoteResolution.message ?? "No remotes returned by rclone listremotes."
             return
         }
@@ -419,7 +508,7 @@ struct ContentView: View {
 
         let mountDir = URL(fileURLWithPath: mountBaseDir).appendingPathComponent(point).path
         if isMountActive(at: mountDir) {
-            status = "Mount already active at \(mountDir)."
+            status = "Mount is already active at \(mountDir)."
             lastErrorDetails = ""
             refreshServiceStatusDelayed()
             return
@@ -430,14 +519,14 @@ struct ContentView: View {
         do {
             try FileManager.default.createDirectory(atPath: mountLogDir, withIntermediateDirectories: true)
         } catch {
-            status = "Failed to create mount log directory: \(mountLogDir)"
+            status = "Could not create the mount log folder: \(mountLogDir)"
             lastErrorDetails = error.localizedDescription
             return
         }
         do {
             try FileManager.default.createDirectory(atPath: mountDir, withIntermediateDirectories: true)
         } catch {
-            status = "Failed to create mount directory: \(mountDir)"
+            status = "Could not create the mount folder: \(mountDir)"
             lastErrorDetails = error.localizedDescription
             return
         }
@@ -467,16 +556,16 @@ struct ContentView: View {
                 if result.exitCode != 0 {
                     status = "Mount failed."
                     let output = [result.output, logTail].filter { !$0.isEmpty }.joined(separator: "\n")
-                    lastErrorDetails = output.isEmpty ? "The command exited with a non-zero status." : output
+                    lastErrorDetails = output.isEmpty ? "The mount command returned an error." : output
                     return
                 }
 
                 if isMountActive(at: mountDir) {
-                    status = "Mount successful at \(mountDir)."
+                    status = "Mount is active at \(mountDir)."
                     lastErrorDetails = ""
                 } else {
-                    status = "Mount command completed, but mount not detected."
-                    lastErrorDetails = logTail.isEmpty ? "Check \(mountLog)" : logTail
+                    status = "The mount command finished, but no active mount was detected."
+                    lastErrorDetails = logTail.isEmpty ? "Check \(mountLog) for details." : logTail
                 }
 
                 refreshServiceStatusDelayed()
@@ -489,20 +578,20 @@ struct ContentView: View {
 
         let requestedRemote = remoteName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !requestedRemote.isEmpty else {
-            status = "Remote name cannot be empty."
+            status = "Enter a remote name to continue."
             lastErrorDetails = status
             return
         }
 
         guard let rclone = resolveRcloneBinary() else {
-            status = "rclone binary was not found."
+            status = "rclone could not be found. Please install or update rclone first."
             lastErrorDetails = status
             return
         }
 
         let remoteResolution = resolveRemote(requested: requestedRemote, configPath: configPath)
         guard let effectiveRemote = remoteResolution.remote else {
-            status = "Could not find any remotes in selected rclone.conf."
+            status = "No remotes were found in the selected rclone.conf file."
             lastErrorDetails = remoteResolution.message ?? "No remotes returned by rclone listremotes."
             return
         }
@@ -514,7 +603,7 @@ struct ContentView: View {
         }
 
         if isProcessRunning(matching: "rclone.*serve.*dlna") {
-            status = "DLNA appears to already be running."
+            status = "DLNA is already running."
             refreshServiceStatusDelayed()
             return
         }
@@ -524,7 +613,7 @@ struct ContentView: View {
         do {
             try FileManager.default.createDirectory(atPath: dlnaLogDir, withIntermediateDirectories: true)
         } catch {
-            status = "Failed to create DLNA log directory: \(dlnaLogDir)"
+            status = "Could not create the DLNA log folder: \(dlnaLogDir)"
             lastErrorDetails = error.localizedDescription
             return
         }
@@ -560,7 +649,7 @@ struct ContentView: View {
                     lastErrorDetails = ""
                 } else {
                     status = "DLNA failed to start."
-                    lastErrorDetails = logTail.isEmpty ? "Check \(dlnaLog)" : logTail
+                    lastErrorDetails = logTail.isEmpty ? "Check \(dlnaLog) for details." : logTail
                 }
                 refreshServiceStatusDelayed()
             }
@@ -570,10 +659,10 @@ struct ContentView: View {
     private func stopDLNANow() {
         let result = runCommand("/usr/bin/pkill", arguments: ["-f", "rclone.*serve.*dlna"])
         if result.exitCode == 0 {
-            status = "Stopped DLNA process."
+            status = "DLNA has been stopped."
             lastErrorDetails = ""
         } else {
-            status = "No running DLNA process found."
+            status = "No running DLNA process was found."
             lastErrorDetails = ""
         }
         refreshServiceStatusDelayed()
@@ -592,7 +681,7 @@ struct ContentView: View {
                 let procLine = processResult.output.split(separator: "\n").first.map(String.init) ?? "running"
                 checks.append("Process: OK (\(procLine))")
             } else {
-                checks.append("Process: FAIL (no running rclone DLNA process found)")
+                checks.append("Process: FAIL (no running rclone DLNA process was found)")
                 passed = false
             }
 
@@ -646,7 +735,7 @@ struct ContentView: View {
         let baseDir = mountBaseDir.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !baseDir.isEmpty else {
-            status = "Mount directory cannot be empty."
+            status = "Enter a mount folder to continue."
             lastErrorDetails = status
             return
         }
@@ -689,14 +778,14 @@ struct ContentView: View {
             let result = runPrivilegedWithResult(command: command, actionName: "download and install macfuse")
             DispatchQueue.main.async {
                 if result.success {
-                    status = "macFUSE install completed."
+                    status = "macFUSE installation completed."
                     if !result.message.isEmpty {
                         lastErrorDetails = result.message
                     }
                     refreshMacFUSEStatus()
                     refreshVersionChecks()
                 } else {
-                    status = "Download and install macFUSE failed."
+                    status = "macFUSE installation failed."
                     lastErrorDetails = result.message
                 }
 
@@ -732,13 +821,13 @@ struct ContentView: View {
             let result = runPrivilegedWithResult(command: command, actionName: "download and install rclone")
             DispatchQueue.main.async {
                 if result.success {
-                    status = "rclone install completed."
+                    status = "rclone installation completed."
                     if !result.message.isEmpty {
                         lastErrorDetails = result.message
                     }
                     refreshVersionChecks()
                 } else {
-                    status = "Download and install rclone failed."
+                    status = "rclone installation failed."
                     lastErrorDetails = result.message
                 }
 
@@ -847,7 +936,7 @@ struct ContentView: View {
 
     private func removeServices() {
         guard let script = Bundle.main.path(forResource: "RemoveServices", ofType: "sh") else {
-            status = "RemoveServices.sh was not found in app resources."
+            status = "RemoveServices.sh is missing from the app bundle."
             lastErrorDetails = status
             return
         }
@@ -862,28 +951,28 @@ struct ContentView: View {
 
     private func testConnection() {
         guard ensureConfigPathSelected() else {
-            connectionStatus = "Config not selected"
+            connectionStatus = "Config file not selected"
             return
         }
 
         let remote = remoteName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !remote.isEmpty else {
-            status = "Remote name cannot be empty."
-            connectionStatus = "Missing remote name"
+            status = "Enter a remote name to continue."
+            connectionStatus = "Remote name missing"
             return
         }
 
         guard let rclone = resolveRcloneBinary() else {
-            status = "rclone binary was not found."
-            connectionStatus = "rclone missing"
+            status = "rclone could not be found. Please install or update rclone first."
+            connectionStatus = "rclone is missing"
             return
         }
 
         connectionStatus = "Testing..."
         let remoteResolution = resolveRemote(requested: remote, configPath: configPath)
         guard let effectiveRemote = remoteResolution.remote else {
-            status = "Could not find any remotes in selected rclone.conf."
-            connectionStatus = "No remotes"
+            status = "No remotes were found in the selected rclone.conf file."
+            connectionStatus = "No remotes found"
             lastErrorDetails = remoteResolution.message ?? "No remotes returned by rclone listremotes."
             return
         }
@@ -892,7 +981,7 @@ struct ContentView: View {
             lastErrorDetails = message
             remoteName = effectiveRemote
         } else {
-            status = "Testing remote \(effectiveRemote): with selected config..."
+            status = "Testing remote \(effectiveRemote): with the selected config file..."
         }
 
         DispatchQueue.global(qos: .userInitiated).async {
@@ -900,11 +989,12 @@ struct ContentView: View {
             DispatchQueue.main.async {
                 if result.exitCode == 0 {
                     connectionStatus = "OK"
-                    status = "Connection test succeeded for remote \(effectiveRemote):"
+                    status = "Connection test succeeded for remote \(effectiveRemote)."
                 } else {
                     let details = result.output.isEmpty ? "Unknown error" : result.output
                     connectionStatus = "Failed"
-                    status = "Connection test failed: \(details)"
+                    status = "Connection test failed."
+                    lastErrorDetails = details
                 }
             }
         }
@@ -916,8 +1006,8 @@ struct ContentView: View {
             let dlna = isProcessRunning(matching: "rclone.*serve.*dlna")
 
             DispatchQueue.main.async {
-                mountServiceStatus = mount ? "Running" : "Not running"
-                dlnaServiceStatus = dlna ? "Running" : "Not running"
+                mountServiceStatus = mount ? "Running" : "Stopped"
+                dlnaServiceStatus = dlna ? "Running" : "Stopped"
             }
         }
     }
@@ -928,9 +1018,9 @@ struct ContentView: View {
             DispatchQueue.main.async {
                 macFUSEStatus = installed ? "Installed" : "Not installed"
                 if installed {
-                    status = "macFUSE is already installed."
+                    status = "macFUSE is installed."
                 } else {
-                    status = "macFUSE not detected. Use Download & Install macFUSE to install the latest release."
+                    status = "macFUSE was not detected. Use Install / Update macFUSE to install the latest release."
                 }
             }
         }
@@ -976,7 +1066,7 @@ struct ContentView: View {
     private func runPrivileged(command: String, actionName: String) {
         let appleScriptSource = "do shell script \"\(escapeForAppleScript(command))\" with administrator privileges"
         guard let scriptObject = NSAppleScript(source: appleScriptSource) else {
-            status = "Failed to create AppleScript for \(actionName)."
+            status = "Could not request administrator access for \(actionName)."
             return
         }
 
@@ -985,7 +1075,7 @@ struct ContentView: View {
 
         if let errorInfo {
             let message = errorInfo[NSAppleScript.errorMessage] as? String ?? "Unknown error"
-            status = "\(actionName.capitalized) failed: \(message)"
+            status = "\(actionName.capitalized) failed."
             lastErrorDetails = message
             return
         }
@@ -995,7 +1085,7 @@ struct ContentView: View {
             status = "\(actionName.capitalized) completed successfully."
             lastErrorDetails = ""
         } else {
-            status = "\(actionName.capitalized) completed successfully with output."
+            status = "\(actionName.capitalized) completed with additional details."
             lastErrorDetails = output
         }
     }
@@ -1022,7 +1112,7 @@ struct ContentView: View {
         if configPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            let detected = autoDetectRcloneConfigPath() {
             configPath = detected
-            status = "Auto-selected config: \((detected as NSString).lastPathComponent)"
+            status = "Auto-selected config file: \((detected as NSString).lastPathComponent)"
         }
 
         let sourcePath = configPath.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1054,12 +1144,18 @@ struct ContentView: View {
         guard !lastErrorDetails.isEmpty else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(lastErrorDetails, forType: .string)
-        status = "Copied error text to clipboard."
+        status = "Copied details to the clipboard."
     }
 
     private func openLogsFolder() {
-        if let resourcesPath = Bundle.main.resourcePath {
-            NSWorkspace.shared.open(URL(fileURLWithPath: resourcesPath))
+        let logsDir = "\(NSHomeDirectory())/Library/Logs/3DFlickFix"
+        do {
+            try FileManager.default.createDirectory(atPath: logsDir, withIntermediateDirectories: true)
+            NSWorkspace.shared.open(URL(fileURLWithPath: logsDir, isDirectory: true))
+            status = "Opened logs folder."
+        } catch {
+            status = "Could not open the logs folder."
+            lastErrorDetails = error.localizedDescription
         }
     }
 
@@ -1070,7 +1166,7 @@ struct ContentView: View {
 
         if let detected = autoDetectRcloneConfigPath() {
             configPath = detected
-            status = "Auto-selected config: \((detected as NSString).lastPathComponent)"
+            status = "Auto-selected config file: \((detected as NSString).lastPathComponent)"
             return true
         }
 
@@ -1094,6 +1190,25 @@ struct ContentView: View {
             }
         }
         return nil
+    }
+}
+
+private struct GlassActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.medium))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.18 : 0.28))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
+            )
+            .scaleEffect(configuration.isPressed ? 0.985 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
